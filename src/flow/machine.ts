@@ -12,20 +12,24 @@ export type FlowState =
   | 'transition' // passage animé entre deux écrans
   | 'summary'    // récapitulatif des 5 planches
   | 'inspect'    // fiche d'une planche
-  | 'gallery';   // galerie de débogage (CDC.gallery)
+  | 'gallery'    // galerie de débogage (CDC.gallery)
+  | 'atlas'      // Atlas céleste : la collection sur la sphère céleste
+  | 'atlasPlate'; // une planche examinée depuis l'Atlas (ou ouverte par un lien direct)
 
 export const TRANSITIONS: Readonly<Record<FlowState, readonly FlowState[]>> = {
-  loading: ['idle', 'gallery'],
-  idle: ['tearing', 'gallery'],
+  loading: ['idle', 'gallery', 'atlas', 'atlasPlate'],
+  idle: ['tearing', 'gallery', 'atlas'],
   tearing: ['opening'],
   opening: ['reveal'],
   reveal: ['walkout'],
   walkout: ['hero'],
   hero: ['transition'],
   transition: ['summary', 'idle'],
-  summary: ['inspect', 'transition'],
+  summary: ['inspect', 'transition', 'atlas'],
   inspect: ['summary'],
   gallery: [],
+  atlas: ['atlasPlate', 'transition'],
+  atlasPlate: ['atlas'],
 };
 
 export function canGo(from: FlowState, to: FlowState): boolean {

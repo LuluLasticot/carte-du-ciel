@@ -19,6 +19,7 @@ import { type FlowState, canGo, IllegalTransition } from './machine';
 import { rollPack } from '../data/roll';
 import { renderFaces } from '../cards/faces';
 import { addCard, collection, countPack, ownedCount, requestPersistence } from '../store/collection';
+import type { Reward } from '../data/economy';
 
 export const pack = new Pack();
 mainScene.add(pack.group);
@@ -43,6 +44,11 @@ export let heroCard = null;
 export let lastTray = null;
 export let skipping = false;
 export let stackZ = 0; // recul de la pile pendant les révélations
+/** récompenses gagnées pendant la pochette en cours (affichées au récapitulatif) */
+export let packRewards: Reward[] = [];
+/** une pochette fermée est prête à être ouverte (sinon il faut en préparer une) */
+export let packReady = false;
+export function setBusy(v: boolean) { busy = v; }
 export let lastInteract = 0;
 export let ghost = { t: 99, run: -1 };
 export const FORCE = (() => { const h = (location.hash || '').toLowerCase(); return h.includes('mythique') ? 4 : h.includes('legendaire') ? 3 : h.includes('epique') ? 2 : -1; })();
@@ -149,6 +155,7 @@ export async function fillPack() {
     if (!faces) await yieldToBrowser();
   }
   try { await renderer.compileAsync(mainScene, cam); } catch (e) { /* compilation au premier rendu */ }
+  packReady = true;
 }
 
 // --------------------------- repos : la pochette attend ---------------------------
@@ -221,7 +228,9 @@ export function tearFrame(dt) {
 export function completeTear() {
   if (pack.done) return;
   go('opening');
-  countPack();
+  packReady = false;
+  const daily = countPack();
+  packRewards = daily ? [daily] : [];
   if (collection.packs === 1) requestPersistence();
   pack.target = pack.dir > 0 ? 1 : 0;
   pack.step(0.05);
@@ -318,7 +327,8 @@ export function enterReveal() {
 }
 export function markOwned(card) {
   const n = card.data.n;
-  const isNew = addCard(n);
+  const { isNew, rewards } = addCard(n);
+  packRewards.push(...rewards);
   UI.setCount(owned());
   return isNew;
 }
@@ -560,6 +570,8 @@ export async function toSummary() {
   go('summary'); busy = false;
   sky.driftOn = 1;
   UI.show(UI.sum, true);
+  packRewards.forEach((r, i) => UI.toast(r.label, `+${r.dust} poussières d'étoiles`, 300 + i * 900));
+  packRewards = [];
 }
 export function pickCard(nx, ny) {
   const rc = new THREE.Raycaster();
@@ -601,6 +613,12 @@ export async function newPack() {
   Snd.ensure(); Snd.whoosh(0.7, 1800, 300, 0.16);
   cards.forEach((c, i) => to(c.s, { y: c.s.y - view.visH * 1.2, rz: (Math.random() - 0.5) * 0.8, rx: 0.4 }, { dur: 0.6, delay: i * 0.04, ease: E.p3i }));
   await wait(0.8);
+  await preparePack();
+  busy = false;
+  enterIdle(true);
+}
+/** Remet en place une pochette neuve et tire son contenu. */
+export async function preparePack() {
   heroCard = null;
   pack.reset(packType);
   pack.inner.add(pack.stack);
@@ -608,6 +626,4 @@ export async function newPack() {
   pack.s.ry = 0;
   pack.group.visible = true;
   await fillPack();
-  busy = false;
-  enterIdle(true);
 }

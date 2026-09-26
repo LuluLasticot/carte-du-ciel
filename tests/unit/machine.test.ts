@@ -28,6 +28,14 @@ describe('machine d\'états', () => {
     for (let i = 1; i < path.length; i++) expect(canGo(path[i - 1], path[i]), `${path[i - 1]} → ${path[i]}`).toBe(true);
   });
 
+  it('ouvre l\'Atlas depuis la pochette ou le récapitulatif, et y revient après une planche', () => {
+    const path: FlowState[] = ['idle', 'atlas', 'atlasPlate', 'atlas', 'transition', 'idle'];
+    for (let i = 1; i < path.length; i++) expect(canGo(path[i - 1], path[i]), `${path[i - 1]} → ${path[i]}`).toBe(true);
+    expect(canGo('summary', 'atlas')).toBe(true);
+    expect(canGo('loading', 'atlasPlate')).toBe(true);
+    expect(canGo('reveal', 'atlas')).toBe(false);
+  });
+
   it('refuse les raccourcis', () => {
     expect(canGo('idle', 'reveal')).toBe(false);
     expect(canGo('reveal', 'summary')).toBe(false);

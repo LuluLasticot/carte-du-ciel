@@ -196,9 +196,8 @@ export const conStarMat = new THREE.ShaderMaterial({
 });
 export let conLines = null, conStars = null;
 export const CON_R = 60;
-export function buildConstellation(key) {
-  if (conLines) { conGroup.remove(conLines); conLines.geometry.dispose(); }
-  if (conStars) { conGroup.remove(conStars); conStars.geometry.dispose(); }
+/** Géométries d'une constellation sur la sphère : tracés (bandes) et étoiles (points). */
+export function constellationGeometry(key: string, radius = CON_R) {
   const C = CONS[key];
   const dirs = C.s.map(([ra, dec]) => eqToSky(ra, dec).normalize());
   const pos = [], other = [], side = [], tt = [], idx = [], index = [];
@@ -207,8 +206,8 @@ export function buildConstellation(key) {
     const A = dirs[i], B = dirs[j];
     const ang = A.angleTo(B);
     const k0 = Math.min(0.4, trim / ang), k1 = 1 - k0;
-    const a = new THREE.Vector3().copy(A).lerp(B, k0).normalize().multiplyScalar(CON_R);
-    const b = new THREE.Vector3().copy(A).lerp(B, k1).normalize().multiplyScalar(CON_R);
+    const a = new THREE.Vector3().copy(A).lerp(B, k0).normalize().multiplyScalar(radius);
+    const b = new THREE.Vector3().copy(A).lerp(B, k1).normalize().multiplyScalar(radius);
     const base = pos.length / 3;
     for (const [p, o, s, t] of [[a, b, -1, 0], [a, b, 1, 0], [b, a, -1, 1], [b, a, 1, 1]] as [THREE.Vector3, THREE.Vector3, number, number][]) {
       pos.push(p.x, p.y, p.z); other.push(o.x, o.y, o.z); side.push(s); tt.push(t); idx.push(li);
@@ -222,15 +221,21 @@ export function buildConstellation(key) {
   g.setAttribute('aT', new THREE.Float32BufferAttribute(tt, 1));
   g.setAttribute('aIdx', new THREE.Float32BufferAttribute(idx, 1));
   g.setIndex(index);
-  conLines = new THREE.Mesh(g, conLineMat);
-  conLines.frustumCulled = false;
   const sp = [], mag = [], del = [];
-  C.s.forEach(([, , m], i) => { const d = dirs[i].clone().multiplyScalar(CON_R); sp.push(d.x, d.y, d.z); mag.push(m); del.push(i * 0.06); });
+  C.s.forEach(([, , m], i) => { const d = dirs[i].clone().multiplyScalar(radius); sp.push(d.x, d.y, d.z); mag.push(m); del.push(i * 0.06); });
   const sg = new THREE.BufferGeometry();
   sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
   sg.setAttribute('aMag', new THREE.Float32BufferAttribute(mag, 1));
   sg.setAttribute('aDelay', new THREE.Float32BufferAttribute(del, 1));
-  conStars = new THREE.Points(sg, conStarMat);
+  return { C, lines: g, stars: sg, segments: C.l.length, dirs };
+}
+export function buildConstellation(key) {
+  if (conLines) { conGroup.remove(conLines); conLines.geometry.dispose(); }
+  if (conStars) { conGroup.remove(conStars); conStars.geometry.dispose(); }
+  const { C, lines, stars } = constellationGeometry(key);
+  conLines = new THREE.Mesh(lines, conLineMat);
+  conLines.frustumCulled = false;
+  conStars = new THREE.Points(stars, conStarMat);
   conStars.frustumCulled = false;
   conGroup.add(conLines, conStars);
   return C;

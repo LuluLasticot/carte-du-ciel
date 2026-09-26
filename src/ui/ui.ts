@@ -12,6 +12,20 @@ export const UI = {
   heroT: $('heroT'), heroN: $('heroN'), heroS: $('heroS'), sum: $('sum'), insp: $('insp'), loader: $('loader'),
   woC: $('woC'), woCName: $('woCName'), woT: $('woT'), woCoord: $('woCoord'), woType: $('woType'), woD: $('woD'), woDig: $('woDig'),
   woUnit: $('woUnit'), woRet: $('woRet'), woSkip: $('woSkip'), count: $('count'), snd: $('snd'),
+  /** Annonce brève (récompense), empilée sous la barre du haut. */
+  toast(title: string, detail: string, delay = 0) {
+    setTimeout(() => {
+      const box = $('toasts');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.innerHTML = `<i class="dust" aria-hidden="true">✦</i><div><b></b><span></span></div>`;
+      t.querySelector('b')!.textContent = title;
+      t.querySelector('span')!.textContent = detail;
+      box.appendChild(t);
+      requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('on')));
+      setTimeout(() => { t.classList.remove('on'); setTimeout(() => t.remove(), 700); }, 4200);
+    }, delay);
+  },
   show(el, on) { el.classList.toggle('on', !!on); if (on) el.classList.remove('out'); },
   out(el) { el.classList.add('out'); el.classList.remove('on'); },
   hint(text) {

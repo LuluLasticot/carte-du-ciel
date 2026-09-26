@@ -1,0 +1,2 @@
+/* Masqué pendant les captures : les annonces s'affichent et disparaissent en temps réel, pas en temps de jeu. */
+.toasts { visibility: hidden !important; }

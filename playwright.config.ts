@@ -8,7 +8,7 @@ const swiftshader = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '
 export default defineConfig({
   testDir: 'tests/visual',
   timeout: 10 * 60_000,
-  expect: { timeout: 120_000, toHaveScreenshot: { maxDiffPixelRatio: 0.015, threshold: 0.25, animations: 'disabled' } },
+  expect: { timeout: 120_000, toHaveScreenshot: { maxDiffPixelRatio: 0.015, threshold: 0.25, animations: 'disabled', stylePath: './tests/visual/screenshot.css' } },
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
@@ -17,6 +17,7 @@ export default defineConfig({
     baseURL: 'http://localhost:4173',
     launchOptions: { args: swiftshader },
     trace: 'retain-on-failure',
+    actionTimeout: 60_000,
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 } },
@@ -25,7 +26,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run build && npm run preview -- --port 4173 --strictPort',
     url: 'http://localhost:4173',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 });

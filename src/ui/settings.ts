@@ -98,6 +98,7 @@ async function confirmImport() {
   await replaceCollection(pendingImport);
   cancelImport();
   UI.setCount(ownedCount(collection));
+  window.dispatchEvent(new Event('collectionchange'));
   refresh();
   note('Collection importée.', 'ok');
 }

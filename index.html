@@ -25,7 +25,7 @@
     <header class="ui top" id="top">
       <div class="brand"><b>Carte du Ciel</b><span>Série I · 32 planches</span></div>
       <div class="tr">
-        <span class="count" id="count">Collection<br><em>00</em>/32</span>
+        <button class="count" id="count" type="button" aria-label="Ouvrir l'Atlas céleste">Collection<br><em>00</em>/32</button>
         <button class="icon-btn" id="setBtn" type="button" aria-expanded="false" aria-controls="settings" aria-label="Réglages et collection">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
       </button>
@@ -58,7 +58,10 @@
     </div>
 
     <div class="ui sum" id="sum">
-      <button class="btn" id="again" type="button">Nouvelle pochette</button>
+      <div class="row">
+        <button class="btn" id="again" type="button">Nouvelle pochette</button>
+        <button class="btn ghost" id="toAtlas" type="button">Voir l'Atlas</button>
+      </div>
       <p>Touchez une planche pour l'examiner</p>
     </div>
 
@@ -71,7 +74,43 @@
       <div class="ty" id="inspTy"></div>
       <p class="d" id="inspD"></p>
       <dl id="inspDl"></dl>
+      <div class="insp-act" id="inspAct"></div>
     </aside>
+
+    <div class="atlas-labels" id="atlasLabels" aria-label="Planches sur la carte du ciel"></div>
+
+    <section class="ui atlas" id="atlas" aria-labelledby="atlasTitle">
+      <div class="atlas-head">
+        <h2 id="atlasTitle">Atlas céleste</h2>
+        <p id="atlasStats"></p>
+        <p class="atlas-note" id="atlasNote"></p>
+      </div>
+      <div class="atlas-bar">
+        <div class="seg" role="tablist" aria-label="Affichage">
+          <button type="button" role="tab" id="tabSky" aria-selected="true">Ciel</button>
+          <button type="button" role="tab" id="tabAlbum" aria-selected="false" aria-controls="album">Album</button>
+        </div>
+        <span class="dust-pill" id="dustPill" title="Poussières d'étoiles"><i aria-hidden="true">✦</i><b id="dustVal">0</b><span class="sr">poussières d'étoiles</span></span>
+        <button class="btn sm" id="atlasBack" type="button">Ouvrir une pochette</button>
+      </div>
+    </section>
+
+    <section class="ui album" id="album" role="tabpanel" aria-labelledby="albumTitle">
+      <div class="album-in">
+        <header class="album-head">
+          <div>
+            <h2 id="albumTitle">Album · Série I</h2>
+            <p id="albumCounts"></p>
+          </div>
+          <div class="album-dust">
+            <p><b id="albumDust">0</b> poussières d'étoiles</p>
+            <button class="btn sm" id="convertBtn" type="button">Convertir les doublons</button>
+            <p class="note" id="albumNote">Chaque doublon rend de la poussière ; la poussière crée une planche manquante.</p>
+          </div>
+        </header>
+        <ul class="album-grid" id="albumGrid"></ul>
+      </div>
+    </section>
 
     <aside class="ui panel" id="settings" role="dialog" aria-labelledby="setTitle">
     <button class="icon-btn close" id="setClose" type="button" aria-label="Fermer les réglages">
@@ -125,6 +164,7 @@
   </aside>
 
   <div class="ui hint" id="hint" role="status"></div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
     <div class="ui glost" id="glLost" role="alert">
     <p>Le moteur 3D a été interrompu par le navigateur. Reprise en cours…</p>

@@ -7,7 +7,7 @@ import {
 
 describe('collection : format et validation', () => {
   it('reprend l\'ancien format du prototype en estimant les pochettes ouvertes', () => {
-    expect(migrateLegacy({ 1: 2, 7: 1, 31: 1, 12: 1 })).toEqual({ cards: { 1: 2, 7: 1, 12: 1, 31: 1 }, packs: 1 });
+    expect(migrateLegacy({ 1: 2, 7: 1, 31: 1, 12: 1 })).toEqual({ cards: { 1: 2, 7: 1, 12: 1, 31: 1 }, packs: 1, dust: 0, lastDaily: '', rewarded: [] });
     expect(migrateLegacy({})).toBeNull();
     expect(migrateLegacy({ 99: 1 })).toBeNull();
     expect(migrateLegacy('n\'importe quoi')).toBeNull();
@@ -19,6 +19,8 @@ describe('collection : format et validation', () => {
     expect(normalize({ cards: { 3: 1.5 }, packs: 1 })).toBeNull();
     expect(normalize({ cards: { 3: -1 }, packs: 1 })).toBeNull();
     expect(normalize({ cards: [1, 2], packs: 1 })).toBeNull();
+    expect(normalize({ cards: { 3: 1 }, packs: 1, dust: -5 })).toBeNull();
+    expect(normalize({ cards: { 3: 1 }, packs: 1, rewarded: ['XYZ'] })).toBeNull();
   });
 
   it('garde un nombre de pochettes cohérent avec les planches possédées', () => {
@@ -27,7 +29,7 @@ describe('collection : format et validation', () => {
   });
 
   it('exporte puis réimporte une collection à l\'identique', () => {
-    const state = { cards: { 1: 3, 14: 1, 31: 2 }, packs: 4 };
+    const state = { cards: { 1: 3, 14: 1, 31: 2 }, packs: 4, dust: 35, lastDaily: '2026-09-25', rewarded: ['SGR'] };
     const text = serialize(state, new Date('2026-09-26T10:00:00Z'));
     expect(JSON.parse(text)).toMatchObject({ format: 'carte-du-ciel/collection', version: 1, exportedAt: '2026-09-26T10:00:00.000Z' });
     expect(parseExport(text)).toEqual({ ok: true, state });
@@ -49,14 +51,14 @@ describe('collection : format et validation', () => {
 describe('collection : persistance IndexedDB', () => {
   it('enregistre les planches et les pochettes, puis les relit', async () => {
     await loadCollection();
-    expect(collection).toEqual({ cards: {}, packs: 0 });
-    countPack();
-    expect(addCard(5)).toBe(true);
-    expect(addCard(5)).toBe(false);
-    addCard(31);
+    expect(collection).toEqual({ cards: {}, packs: 0, dust: 0, lastDaily: '', rewarded: [] });
+    expect(countPack(new Date(2026, 8, 26))?.dust).toBe(25);
+    expect(addCard(5).isNew).toBe(true);
+    expect(addCard(5).isNew).toBe(false);
+    expect(addCard(31).rewards.map((r) => r.key)).toEqual(['SGR']);
     await replaceCollection({ ...collection });
-    collection.cards = {}; collection.packs = 0;
+    collection.cards = {}; collection.packs = 0; collection.dust = 0;
     await loadCollection();
-    expect(collection).toEqual({ cards: { 5: 2, 31: 1 }, packs: 1 });
+    expect(collection).toEqual({ cards: { 5: 2, 31: 1 }, packs: 1, dust: 25 + 40, lastDaily: '2026-09-26', rewarded: ['SGR'] });
   });
 });

@@ -15,6 +15,11 @@ import { PACK_H, PACK_W } from './pack/pack';
 import { applyQuality, device, quality, post, CON_R, IS_TOUCH, cam, canvas, conLineMat, conStarMat, mainScene, renderFrame, renderer, resize, rtScene, sky, skyCam, skyGroup, skyMat, skyScene, updateCamera, view, CAM_Z } from './render/engine';
 import { burstColor, heroRays, packRays, parts, updateFlare } from './render/fx';
 import { UI } from './ui/ui';
+import { atlas, atlasPointerDown, atlasPointerMove, atlasPointerUp, atlasWheel, updateAtlas } from './atlas/atlas';
+import { initAlbum } from './atlas/album';
+import { closeAtlas, focusPlate, getFocusCard, isAlbumOpen, onPopState, openAtlas, refreshAtlasUI, showAlbum, startFromRoute, unfocusPlate } from './flow/atlas-flow';
+import { currentRoute } from './core/router';
+
 import { lower } from './render/quality';
 import { settings } from './store/settings';
 import { motion } from './core/motion';
@@ -49,6 +54,7 @@ function onDown(e) {
   pointer.nx = nx; pointer.ny = ny;
   touch();
   pointer.mode = 'none';
+  if (state === 'atlas') { if (!busy && atlasPointerDown(e)) pointer.mode = 'atlas'; return; }
   if ((state === 'idle' || state === 'tearing') && !busy) {
     const L = packLocal(nx, ny);
     if (L && L.u > -0.15 && L.u < 1.15 && L.v > -0.05 && L.v < 1.12) {
@@ -59,10 +65,13 @@ function onDown(e) {
     }
   } else if (state === 'reveal') pointer.mode = 'tap';
   else if (state === 'walkout') skipWalkout();
-  else if (state === 'hero' || state === 'inspect') pointer.mode = 'rotate';
+  else if (state === 'hero' || state === 'inspect' || state === 'atlasPlate') pointer.mode = 'rotate';
   else if (state === 'summary') pointer.mode = 'pick';
 }
+// planche que l'on fait pivoter au doigt selon l'écran
+function rotCard() { return state === 'hero' ? heroCard : state === 'atlasPlate' ? getFocusCard() : cards[inspected]; }
 function onMove(e) {
+  if (state === 'atlas') atlasPointerMove(e);
   const [nx, ny] = toNDC(e);
   if (!pointer.down) { pointer.nx = nx; pointer.ny = ny; return; }
   if (e.pointerId !== pointer.id) return;
@@ -87,11 +96,12 @@ function onMove(e) {
     }
     if (pack.started) pack.pull(L.u, (L.v - pointer.v0) * 0.35);
   } else if (pointer.mode === 'rotate') {
-    const c = state === 'hero' ? heroCard : cards[inspected];
+    const c = rotCard();
     if (c) { c.ty.t = clamp((e.clientX - pointer.sx) / 170, -1.2, 1.2) * 0.95; c.tx.t = clamp((e.clientY - pointer.sy) / 170, -1, 1) * 0.6; }
   }
 }
 function onUp(e) {
+  if (state === 'atlas') { const n = atlasPointerUp(e); if (n && !busy) void focusPlate(n); }
   if (!pointer.down || e.pointerId !== pointer.id) return;
   pointer.down = false;
   try { canvas.releasePointerCapture(e.pointerId); } catch (err) { /* ignoré */ }
@@ -106,9 +116,9 @@ function onUp(e) {
       break;
     case 'tap': revealNext(); break;
     case 'rotate': {
-      const c = state === 'hero' ? heroCard : cards[inspected];
+      const c = rotCard();
       if (c) { c.tx.t = 0; c.ty.t = 0; }
-      if (tap) { if (state === 'hero') toSummary(); else if (state === 'inspect') closeInspect(); }
+      if (tap) { if (state === 'hero') toSummary(); else if (state === 'inspect') closeInspect(); else if (state === 'atlasPlate') void unfocusPlate(); }
       break;
     }
     case 'pick': if (tap) { const i = pickCard(nx, ny); if (i >= 0) inspect(i); } break;
@@ -120,8 +130,13 @@ window.addEventListener('pointermove', onMove, { passive: true });
 window.addEventListener('pointerup', onUp);
 window.addEventListener('pointercancel', onUp);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('wheel', (e) => { if (state === 'atlas') atlasWheel(e); }, { passive: false });
 window.addEventListener('keydown', (e) => {
   if (settingsOpen()) { if (e.key === 'Escape') closeSettings(); return; }
+  if (state === 'atlas' || state === 'atlasPlate') {
+    if (e.key === 'Escape') { if (state === 'atlasPlate') void unfocusPlate(); else if (isAlbumOpen()) showAlbum(false); }
+    return;
+  }
   const tag = e.target && (e.target as HTMLElement).tagName;
   if ((tag === 'BUTTON' || tag === 'INPUT' || tag === 'LABEL') && (e.key === ' ' || e.key === 'Enter')) return;
   if (e.key === ' ' || e.key === 'Enter') {
@@ -137,7 +152,16 @@ window.addEventListener('keydown', (e) => {
 });
 for (const b of UI.packs.querySelectorAll('button')) b.addEventListener('click', () => { Snd.ensure(); setPackType(+b.dataset.pack); });
 $('again').addEventListener('click', () => newPack());
-$('inspClose').addEventListener('click', () => closeInspect());
+$('inspClose').addEventListener('click', () => { if (state === 'atlasPlate') void unfocusPlate(); else closeInspect(); });
+UI.count.addEventListener('click', () => { if (state === 'atlasPlate') void unfocusPlate(); else if (state === 'idle' || state === 'summary') void openAtlas(); });
+$('toAtlas').addEventListener('click', () => void openAtlas());
+$('atlasBack').addEventListener('click', () => void closeAtlas());
+$('tabSky').addEventListener('click', () => showAlbum(false));
+$('tabAlbum').addEventListener('click', () => showAlbum(true));
+window.addEventListener('popstate', () => void onPopState());
+window.addEventListener('collectionchange', () => refreshAtlasUI());
+atlas.onPick = (n) => { if (state === 'atlas' && !busy) void focusPlate(n); };
+initAlbum();
 initSettings();
 UI.snd.addEventListener('click', () => {
   Snd.ensure();
@@ -182,8 +206,8 @@ function tiltTouch() {
   if (!motion.active || pointer.down) return;
   const gx = motion.x, gy = motion.y;
   if (state === 'summary') cards.forEach((c) => { c.ty.t = gx * 0.28; c.tx.t = -gy * 0.2; });
-  else if (state === 'inspect' || state === 'hero') {
-    const c = state === 'hero' ? heroCard : cards[inspected];
+  else if (state === 'inspect' || state === 'hero' || state === 'atlasPlate') {
+    const c = rotCard();
     if (c) { c.ty.t = gx * 0.5; c.tx.t = -gy * 0.35; }
   } else if (state === 'reveal' && revealIdx > 0 && !busy) {
     const c = cards[revealIdx - 1];
@@ -201,8 +225,8 @@ function hoverUpdate() {
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) { c.ty.t = dx * 0.38; c.tx.t = -dy * 0.3; hovered = i; } else { c.tx.t = 0; c.ty.t = 0; }
     });
     canvas.style.cursor = hovered >= 0 ? 'pointer' : '';
-  } else if ((state === 'inspect' || state === 'hero') && !pointer.down) {
-    const c = state === 'hero' ? heroCard : cards[inspected];
+  } else if ((state === 'inspect' || state === 'hero' || state === 'atlasPlate') && !pointer.down) {
+    const c = rotCard();
     if (c) { c.ty.t = pointer.nx * 0.45; c.tx.t = -pointer.ny * 0.3; }
   } else if (state === 'reveal' && revealIdx > 0 && !busy) {
     const c = cards[revealIdx - 1];
@@ -231,6 +255,7 @@ function update(dt) {
   updateTweens(dt);
   flushFrame();
   motion.update(dt);
+  updateAtlas(dt);
   if (state === 'idle' || state === 'tearing') {
     if (!pointer.down) { pack.tilt.y.t = IS_TOUCH ? motion.x * 0.24 : pointer.nx * 0.22; pack.tilt.x.t = IS_TOUCH ? -motion.y * 0.14 : -pointer.ny * 0.12; if (!pack.started) pack.tilt.z.t = 0; }
     const g = (Clock.t % 4.4) / 1.25;
@@ -322,7 +347,7 @@ async function loadFonts() {
 // accès de test / démonstration
 window.__parts = parts;
 window.CDC = {
-  get state() { return state; }, get cards() { return cards; }, facesInfo, quality, device, capturePlate, pack, post, sky, autoTear, revealNext, skipWalkout, toSummary, inspect, closeInspect, newPack, setPackType,
+  get state() { return state; }, get busy() { return busy; }, get cards() { return cards; }, openAtlas, closeAtlas, focusPlate, unfocusPlate, showAlbum, facesInfo, quality, device, capturePlate, pack, post, sky, autoTear, revealNext, skipWalkout, toSummary, inspect, closeInspect, newPack, setPackType,
   setManual(v) { manual = v; last = performance.now(); },
   async advance(sec, fps = 30) {
     const n = Math.max(1, Math.round(sec * fps));
@@ -365,14 +390,16 @@ async function init() {
   UI.setCount(owned());
   pack.setType(packType);
   pack.s.sc = LAY.packS; pack.s.y = LAY.packY;
-  $('loadMsg').textContent = 'Préparation des planches…';
-  await fillPack();
+  const route = currentRoute();
+  $('loadMsg').textContent = route.name === 'pack' ? 'Préparation des planches…' : 'Pointage du télescope…';
+  // une adresse /atlas ou /planche/N ouvre directement l'Atlas : la pochette sera préparée au retour
+  if (route.name === 'pack') await fillPack(); else pack.group.visible = false;
   try { await renderer.compileAsync(skyScene, skyCam); } catch (e) { /* ignoré */ }
   requestAnimationFrame(loop);
   await nextFrame(); await nextFrame();
   UI.loader.classList.add('off');
   UI.show(UI.top, true);
-  enterIdle(true);
+  if (!(await startFromRoute(route))) enterIdle(true);
 }
 // --------------------------- rendu d'une planche seule (?plate=N) ---------------------------
 // Sert à produire les images des planches (page de repli, aperçus de partage) : voir scripts/render-plates.mjs.

@@ -2,7 +2,7 @@
 
 Ouverture de pochettes de planches célestes en 3D. On déchire la pochette du doigt ou à la souris, on découvre cinq planches une à une, et la plus rare a droit à sa propre séquence : le ciel pivote vers sa constellation, un réticule l'accroche, sa distance défile, puis elle surgit.
 
-Série I : 32 planches, 5 raretés (Commune, Rare, Épique, Légendaire, Mythique) et 5 finitions (Gravure, Argentique, Spectrale, Dorée, Singularité). Tout est procédural : illustrations en shaders GLSL, textures dessinées au canvas, sons synthétisés en WebAudio. Aucune image ni aucun son externe.
+Série I : 32 planches, 5 raretés (Commune, Rare, Épique, Légendaire, Mythique) et 5 finitions (Gravure, Argentique, Spectrale, Dorée, Singularité). La collection se consulte dans l'**Atlas céleste** : chaque planche obtenue s'allume à sa vraie position dans le ciel, et les constellations se tracent à mesure qu'on les complète. Tout est procédural : illustrations en shaders GLSL, textures dessinées au canvas, sons synthétisés en WebAudio. Aucune image ni aucun son externe.
 
 ## Démarrer
 
@@ -25,8 +25,9 @@ npm run dev          # http://localhost:5173
 | `npm run render:plates` | rend les 32 planches en WebP dans `public/plates/` (après `npm run build`) |
 | `npm run make:icons` | génère les icônes de l'application dans `public/icons/` |
 
-Adresses utiles :
+Adresses :
 
+- `/` : la pochette ; `/atlas` : l'Atlas céleste ; `/planche/12` : la planche 12 (lien partageable) ;
 - `/#epique`, `/#legendaire`, `/#mythique` : forcent la rareté de la dernière planche ;
 - `?q=low`, `?q=medium`, `?q=high` : imposent un niveau de qualité ;
 - `?fallback` : affiche la page de repli sans WebGL ;
@@ -41,9 +42,11 @@ src/
 ├─ main.ts         entrée : vérifie WebGL 2, charge l'application ou la page de repli, service worker
 ├─ app.ts          application 3D : saisie (pointeur, clavier, gyroscope), boucle, démarrage
 ├─ fallback.ts     page de repli sans WebGL (planches en images)
-├─ core/           outils (tweens, easings, ressorts), aléatoire pur, pointeur, gyroscope
-├─ data/           catalogue de la Série I (raretés, pochettes, constellations, planches), tirage
-├─ flow/           déroulé d'une ouverture et machine d'états
+├─ core/           outils (tweens, easings, ressorts), aléatoire pur, pointeur, gyroscope, adresses
+├─ astro/          éphémérides : positions du Soleil, de la Lune, des planètes et des comètes
+├─ atlas/          Atlas céleste (repères, constellations, navigation) et Album
+├─ data/           catalogue de la Série I, tirage, économie (poussière d'étoiles, récompenses)
+├─ flow/           déroulé d'une ouverture, enchaînements de l'Atlas, machine d'états
 ├─ render/         renderer, bloom et composition, ciel, constellations, caméra, particules, niveaux de qualité
 ├─ cards/          planche 3D, dessin des faces au canvas, Worker de dessin
 ├─ pack/           pochette et mécanique de déchirure
@@ -71,6 +74,8 @@ tests/
 ```
 loading → idle → tearing → opening → reveal → walkout → hero → transition → summary ⇄ inspect
                                                                               summary → transition → idle
+idle, summary → atlas ⇄ atlasPlate          atlas → transition → idle
+loading → atlas, atlasPlate                 (adresses /atlas et /planche/N)
 ```
 
 Tout changement d'état passe par `go()` (`src/flow/flow.ts`). Une transition absente de la table lève une erreur en développement et un avertissement en production : les courses entre animations deviennent visibles au lieu de produire un écran incohérent.
@@ -78,6 +83,16 @@ Tout changement d'état passe par `go()` (`src/flow/flow.ts`). Une transition ab
 ### Temps du jeu
 
 Toutes les animations suivent `Clock.t` (et non l'horloge du navigateur). `nextFrame()` attend la prochaine image du jeu. C'est ce qui rend les tests visuels reproductibles : ils pilotent le temps image par image avec `CDC.advance()`.
+
+### Atlas céleste
+
+`src/atlas/atlas.ts` place un repère par planche sur la sphère céleste du fond, aux coordonnées réelles (ascension droite, déclinaison). Les objets du Système solaire (Lune, planètes, Cérès, comètes de Halley et Hale-Bopp) sont placés à leur position du jour, calculée par `src/astro/ephemeris.ts` à partir d'éléments orbitaux moyens (précision de l'ordre du degré, vérifiée par des tests : Soleil au 1er janvier 2000, équinoxe, grande conjonction de 2020, Hale-Bopp en 1997). L'écliptique est tracée en pointillés.
+
+On fait tourner le ciel au doigt ou à la souris (avec inertie), on zoome à la molette ou en pinçant ; le nord se remet doucement en haut. Chaque repère est un vrai bouton HTML, utilisable au clavier. Toucher une planche fait pivoter le ciel vers elle et la fait apparaître en 3D avec sa fiche ; pour les objets du Système solaire, la fiche donne leur position du jour.
+
+### Album, poussière d'étoiles et récompenses
+
+L'Album (onglet de l'Atlas) montre les 32 planches : image pour celles qu'on possède (`public/plates/`), silhouette pour les autres. Les doublons se convertissent en poussière d'étoiles (5 à 250 selon la rareté) ; la poussière crée une planche manquante (40 à 2 000). La première pochette de chaque jour rapporte 25 poussières, et chaque constellation complétée 40 par planche. Tout est calculé par des fonctions pures dans `src/data/economy.ts`, testées.
 
 ### Qualité graphique
 
@@ -104,7 +119,7 @@ Les faces des planches (texte, dorures, masques) sont dessinées dans `src/cards
 
 ## Tests visuels
 
-Le parcours `tests/visual/opening.spec.ts` ouvre une pochette jusqu'à la fiche d'une planche, en bureau et en mobile, avec un hasard et une horloge figés. Il compare six captures aux images de référence et échoue sur toute erreur de console ou transition inattendue. `tests/visual/robustness.spec.ts` couvre le panneau de réglages (import d'une sauvegarde, changement de qualité), la reprise après une perte du contexte WebGL et la page de repli.
+Le parcours `tests/visual/opening.spec.ts` ouvre une pochette jusqu'à la fiche d'une planche, en bureau et en mobile, avec un hasard et une horloge figés. Il compare six captures aux images de référence et échoue sur toute erreur de console ou transition inattendue. `tests/visual/atlas.spec.ts` parcourt l'Atlas (ciel, planche, retour arrière du navigateur, Album, conversion des doublons, création d'une planche) et un lien direct vers une planche. `tests/visual/robustness.spec.ts` couvre le panneau de réglages (import d'une sauvegarde, changement de qualité), la reprise après une perte du contexte WebGL et la page de repli.
 
 Le rendu WebGL passe par SwiftShader (logiciel) : chaque parcours prend 1 à 2 minutes. Les images de référence du dépôt ont été produites sous Linux, comme en CI. Le rendu des polices diffère sous macOS : pour lancer ces tests sur ton Mac, génère d'abord tes propres références avec `npm run test:visual:update` (elles portent le suffixe `-darwin` et cohabitent avec celles de Linux).
 
@@ -116,7 +131,7 @@ Si la CI échoue uniquement sur des écarts de rendu dus à l'environnement, rel
 2. Sur vercel.com : **Add New → Project**, importer le dépôt. Vercel lit `vercel.json` (framework Vite, build `npm run build`, sortie `dist/`).
 3. Chaque branche obtient une URL de prévisualisation, `main` part en production. Le domaine se branche dans **Settings → Domains**.
 
-`vercel.json` ajoute un cache d'un an sur les fichiers versionnés de `/assets/`, désactive le cache de `sw.js` (pour que les mises à jour arrivent) et pose des en-têtes de sécurité, dont une Content-Security-Policy stricte (aucun script ni police externe).
+`vercel.json` renvoie toutes les adresses de l'application (`/atlas`, `/planche/12`…) vers `index.html`, ajoute un cache d'un an sur les fichiers versionnés de `/assets/`, désactive le cache de `sw.js` (pour que les mises à jour arrivent) et pose des en-têtes de sécurité, dont une Content-Security-Policy stricte (aucun script ni police externe).
 
 La CI GitHub (`.github/workflows/ci.yml`) vérifie les types, lance les tests unitaires, construit le site, puis exécute les tests visuels.
 
@@ -124,7 +139,7 @@ La CI GitHub (`.github/workflows/ci.yml`) vérifie les types, lance les tests un
 
 - [x] **I. Fondations** : Vite, TypeScript, Three.js depuis npm, shaders en fichiers, machine d'états, polices auto-hébergées, CI, tests
 - [x] **II. Robustesse** : niveaux de qualité, textures dans un Worker, repli sans WebGL, gyroscope, PWA, IndexedDB
-- [ ] **III. Atlas céleste** : la collection affichée sur la sphère céleste
+- [x] **III. Atlas céleste** : la collection sur la sphère céleste, Album, poussière d'étoiles, adresses directes
 - [ ] **IV. Série II** : 32 nouvelles planches, Atelier de réglage
 - [ ] **V. Mise en scène et partage**
 - [ ] **VI. Vitrine portfolio**

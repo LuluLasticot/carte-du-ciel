@@ -28,6 +28,8 @@ import FS_VS_SRC from './post/fullscreen.vs.glsl?raw';
 import DOWN_FS_SRC from './post/kawase-down.fs.glsl?raw';
 import UP_FS_SRC from './post/kawase-up.fs.glsl?raw';
 import COMP_FS_SRC from './post/composite.fs.glsl?raw';
+import ATLAS_MARKER_VS_SRC from './atlas/marker.vs.glsl?raw';
+import ATLAS_MARKER_FS_SRC from './atlas/marker.fs.glsl?raw';
 
 export const GLSL_COMMON: string = GLSL_COMMON_SRC;
 export const GLSL_ART: string = GLSL_ART_SRC;
@@ -57,3 +59,5 @@ export const FS_VS: string = FS_VS_SRC;
 export const DOWN_FS: string = DOWN_FS_SRC;
 export const UP_FS: string = UP_FS_SRC;
 export const COMP_FS: string = COMP_FS_SRC;
+export const ATLAS_MARKER_VS: string = ATLAS_MARKER_VS_SRC;
+export const ATLAS_MARKER_FS: string = ATLAS_MARKER_FS_SRC;
