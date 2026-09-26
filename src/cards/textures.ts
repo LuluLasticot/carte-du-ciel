@@ -12,7 +12,11 @@ export const AC = { x: 500, y: 532, r: 322 };      // oculaire (fenêtre de l'im
 export const RING0 = 330, RING1 = 352;
 export const D2R = Math.PI / 180;
 
-export function mkCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+/** Canvas 2D : élément HTML sur le fil principal, OffscreenCanvas dans un Worker. */
+export function mkCanvas(w, h): any {
+  if (typeof document === 'undefined') return new OffscreenCanvas(w, h);
+  const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
+}
 export function rrPath(c, x, y, w, h, r) {
   c.beginPath();
   c.moveTo(x + r, y); c.lineTo(x + w - r, y); c.quadraticCurveTo(x + w, y, x + w, y + r);

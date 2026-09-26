@@ -8,6 +8,8 @@
   },
   "include": [
     "tests",
+    "tools",
+    "scripts",
     "vite.config.ts",
     "playwright.config.ts"
   ]

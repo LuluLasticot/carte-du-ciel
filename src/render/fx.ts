@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { Clock, REDUCED, TAU } from '../core/util';
 import { TIERS } from '../data/catalog';
 import { FLARE_FS, GLSL_COMMON, PART_FS, PART_VS, QUAD_VS, RAYS_FS } from '../shaders/index';
-import { cam, mainScene } from './engine';
+import { cam, mainScene, quality } from './engine';
 
 export class Particles {
   declare a0: any;
@@ -107,7 +107,7 @@ export function burstColor(t, k) {
 }
 export interface BurstOptions { flat?: boolean; up?: number; vz?: number; life?: number; drag?: number; grav?: number; size?: number }
 export function burst(x, y, z, t, n, speed = 4, opts: BurstOptions = {}) {
-  const N = REDUCED ? Math.round(n * 0.35) : n;
+  const N = Math.round(n * (REDUCED ? 0.35 : 1) * quality.profile.particles);
   for (let i = 0; i < N; i++) {
     const a = Math.random() * TAU, e = (Math.random() - 0.5) * Math.PI * (opts.flat ? 0.3 : 1);
     const v = speed * (0.25 + Math.random() * 0.9);

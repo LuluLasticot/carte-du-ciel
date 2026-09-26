@@ -5,9 +5,10 @@
 import * as THREE from 'three';
 import { Clock, Spring, TAU } from '../core/util';
 import { TIERS } from '../data/catalog';
-import { renderer } from '../render/engine';
+import { device, quality, renderer } from '../render/engine';
 import { BACK_FS, CARD_FS, CARD_VS, EDGE_FS, EDGE_VS, GLSL_ART, GLSL_COMMON } from '../shaders/index';
 import { CH, AC, CW, drawCardBack, drawCardFace } from './textures';
+import type { FaceBitmaps } from './faces';
 
 export const CARD_W = 2.5, CARD_H = 3.5, CARD_T = 0.014, CARD_RAD = 0.12;
 export function roundedRectShape(w, h, r) {
@@ -47,7 +48,8 @@ export function edgeGeometry(shape, depth) {
 export const CARD_SHAPE = roundedRectShape(CARD_W, CARD_H, CARD_RAD);
 export const CARD_FACE_GEO = faceGeometry(CARD_SHAPE, CARD_W, CARD_H);
 export const CARD_EDGE_GEO = edgeGeometry(CARD_SHAPE, CARD_T);
-export const TEX_SCALE = (Math.min(screen.width || 800, screen.height || 800) * (window.devicePixelRatio || 1)) >= 1300 ? 1.25 : 1.0;
+/** Échelle des textures : le profil de qualité, plafonnée à 1 sur les petits écrans. */
+export function texScale() { const s = quality.profile.texScale; return device.screenPx >= 1300 ? s : Math.min(1, s); }
 export const MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
 export const PARALLAX = [0, 0, 0.08, 0.08, 0.15];
 export const EDGE_COL = [[0.8, 0.7, 0.49], [0.75, 0.8, 0.88], [0.7, 0.72, 0.8], [1.0, 0.74, 0.32], [0.05, 0.05, 0.07]];
@@ -61,9 +63,20 @@ export function canvasTex(cv, srgb) {
   t.magFilter = THREE.LinearFilter;
   return t;
 }
+/** Texture depuis une ImageBitmap déjà retournée par le Worker (voir faces.worker.ts). */
+export function bitmapTex(bmp: ImageBitmap, srgb: boolean) {
+  const t = new THREE.Texture(bmp);
+  t.flipY = false;
+  t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  t.anisotropy = Math.min(8, MAX_ANISO);
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
+}
 export let BACK_TEX = null;
 export function backTextures() {
-  if (!BACK_TEX) { const b = drawCardBack(TEX_SCALE); BACK_TEX = { c: canvasTex(b.color, true), m: canvasTex(b.mask, false), texel: new THREE.Vector2(1 / b.mask.width, 1 / b.mask.height) }; }
+  if (!BACK_TEX) { const b = drawCardBack(texScale()); BACK_TEX = { c: canvasTex(b.color, true), m: canvasTex(b.mask, false), texel: new THREE.Vector2(1 / b.mask.width, 1 / b.mask.height) }; }
   return BACK_TEX;
 }
 
@@ -91,13 +104,13 @@ export class Card {
   declare tier: any;
   declare tx: any;
   declare ty: any;
-  constructor(data) {
+  constructor(data, pre?: FaceBitmaps | null) {
     this.data = data;
     this.tier = data.tier;
     this.group = new THREE.Group();
-    const face = drawCardFace(data, TEX_SCALE);
-    this.texC = canvasTex(face.color, true);
-    this.texM = canvasTex(face.mask, false);
+    const face = pre || drawCardFace(data, texScale());
+    this.texC = pre ? bitmapTex(pre.color, true) : canvasTex(face.color, true);
+    this.texM = pre ? bitmapTex(pre.mask, false) : canvasTex(face.mask, false);
     const a = data.art;
     const glowCol = new THREE.Color(...TIERS[data.tier].rgb);
     this.frontMat = new THREE.ShaderMaterial({

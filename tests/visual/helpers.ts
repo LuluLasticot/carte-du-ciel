@@ -22,7 +22,7 @@ export class Scene {
 
   async open(hash = '') {
     await this.page.addInitScript(DETERMINISM);
-    await this.page.goto('/' + hash);
+    await this.page.goto('/?q=high' + hash);
     await this.page.waitForFunction(() => (window as any).CDC?.state === 'idle', null, { timeout: 240_000, polling: 500 });
     await this.page.evaluate(() => (window as any).CDC.setManual(true));
   }

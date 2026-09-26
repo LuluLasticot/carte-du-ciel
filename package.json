@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:visual": "playwright test",
-    "test:visual:update": "playwright test --update-snapshots"
+    "test:visual:update": "playwright test --update-snapshots",
+    "render:plates": "node scripts/render-plates.mjs",
+    "make:icons": "node scripts/make-icons.mjs"
   },
   "engines": {
     "node": ">=20.19"
@@ -24,6 +26,7 @@
     "@playwright/test": "1.56.1",
     "@types/node": "^22.20.4",
     "@types/three": "0.169.0",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "~5.9.3",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"

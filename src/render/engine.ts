@@ -7,6 +7,8 @@ import { D2R } from '../cards/textures';
 import { $ } from '../core/dom';
 import { Clock, E, REDUCED, tween } from '../core/util';
 import { CONS } from '../data/catalog';
+import { PROFILES, type QualityLevel, type QualityProfile, detectQuality, fromQuery } from './quality';
+import { settings } from '../store/settings';
 import { CLINE_FS, CLINE_VS, COMP_FS, CSTAR_FS, CSTAR_VS, DOWN_FS, FS_VS, GLSL_COMMON, SKY_FS, SKY_VS, UP_FS } from '../shaders/index';
 
 export const canvas = $('gl');
@@ -30,7 +32,32 @@ cam.position.set(0, 0, CAM_Z);
 export const skyCam = new THREE.PerspectiveCamera(46, 1, 0.1, 300);
 
 export const view = { w: 1, h: 1, dpr: 1, res: 1, visH: 1, visW: 1, aspect: 1, portrait: false, px2w: 0.01 };
-export const MAX_DPR = Math.min(window.devicePixelRatio || 1, IS_TOUCH ? 2 : 2);
+
+// --------------------------- qualité ---------------------------
+function gpuName(): string {
+  try {
+    const gl = renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '');
+  } catch (e) { return ''; }
+}
+const nav = navigator as Navigator & { deviceMemory?: number };
+export const device = {
+  gpu: gpuName(),
+  mobile: IS_TOUCH || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+  memory: nav.deviceMemory || 0,
+  cores: navigator.hardwareConcurrency || 0,
+  screenPx: Math.round(Math.min(screen.width || 800, screen.height || 800) * (window.devicePixelRatio || 1)),
+};
+export const quality = {
+  /** niveau détecté pour cet appareil */
+  detected: detectQuality(device) as QualityLevel,
+  level: 'high' as QualityLevel,
+  profile: PROFILES.high as QualityProfile,
+};
+quality.level = fromQuery(location.search) || (settings.quality === 'auto' ? quality.detected : settings.quality);
+quality.profile = PROFILES[quality.level];
+export function maxDpr() { return Math.min(window.devicePixelRatio || 1, quality.profile.maxDpr); }
 
 // --------------------------- post-traitement ---------------------------
 export const FS_GEO = new THREE.BufferGeometry();
@@ -44,10 +71,31 @@ export const post = {
   shock: new THREE.Vector4(0.5, 0.5, 0, 0), lens: new THREE.Vector4(0.5, 0.5, 0.1, 0),
 };
 export const HDR = THREE.HalfFloatType;
-export const rtScene = new THREE.WebGLRenderTarget(4, 4, { type: HDR, samples: 4, depthBuffer: true });
-export const bloomDown = [], bloomUp = [];
-for (let i = 0; i < 6; i++) bloomDown.push(new THREE.WebGLRenderTarget(4, 4, { type: HDR, depthBuffer: false }));
-for (let i = 0; i < 5; i++) bloomUp.push(new THREE.WebGLRenderTarget(4, 4, { type: HDR, depthBuffer: false }));
+export let rtScene: THREE.WebGLRenderTarget;
+export const bloomDown: THREE.WebGLRenderTarget[] = [], bloomUp: THREE.WebGLRenderTarget[] = [];
+/** (Re)crée les cibles de rendu selon le profil : anticrénelage et profondeur du bloom. */
+function buildTargets() {
+  rtScene?.dispose();
+  for (const t of [...bloomDown, ...bloomUp]) t.dispose();
+  bloomDown.length = 0; bloomUp.length = 0;
+  const p = quality.profile;
+  rtScene = new THREE.WebGLRenderTarget(4, 4, { type: HDR, samples: p.msaa, depthBuffer: true });
+  for (let i = 0; i < p.bloomLevels; i++) bloomDown.push(new THREE.WebGLRenderTarget(4, 4, { type: HDR, depthBuffer: false }));
+  for (let i = 0; i < p.bloomLevels - 1; i++) bloomUp.push(new THREE.WebGLRenderTarget(4, 4, { type: HDR, depthBuffer: false }));
+}
+buildTargets();
+const qualityListeners = new Set<(level: QualityLevel) => void>();
+export function onQualityChange(fn: (level: QualityLevel) => void) { qualityListeners.add(fn); }
+/** Change de niveau en cours de partie (réglages ou baisse automatique). */
+export function applyQuality(level: QualityLevel) {
+  if (level === quality.level) return;
+  quality.level = level;
+  quality.profile = PROFILES[level];
+  view.res = 1;
+  buildTargets();
+  resize();
+  for (const fn of qualityListeners) fn(level);
+}
 export const downMat = fsMat(DOWN_FS, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uThreshold: { value: 1.0 }, uPrefilter: { value: 1 } });
 export const upMat = fsMat(UP_FS, { tSrc: { value: null }, tAdd: { value: null }, uTexel: { value: new THREE.Vector2() } });
 export const compMat = fsMat(COMP_FS, {
@@ -89,7 +137,7 @@ export function renderFrame() {
   u.tScene.value = rtScene.texture; u.tBloom.value = bloomUp[0].texture;
   u.uRes.value.set(rtScene.width, rtScene.height);
   u.uTime.value = Clock.t;
-  u.uExposure.value = post.exposure; u.uBloomK.value = post.bloom / 6; u.uVig.value = post.vig; u.uGrain.value = post.grain;
+  u.uExposure.value = post.exposure; u.uBloomK.value = post.bloom / bloomDown.length; u.uVig.value = post.vig; u.uGrain.value = post.grain;
   u.uCA.value = post.ca; u.uFlash.value = post.flash; u.uFlashCol.value.copy(post.flashCol); u.uBars.value = post.bars;
   u.uZoomBlur.value = post.zoomBlur; u.uSat.value = post.sat; u.uShock.value.copy(post.shock); u.uLens.value.copy(post.lens);
   drawFS(compMat, null);
@@ -217,7 +265,7 @@ export function setPackLayout(fn: () => void) { packLayout = fn; }
 export function resize() {
   const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
   view.w = w; view.h = h;
-  view.dpr = Math.min(MAX_DPR, 2) * view.res;
+  view.dpr = maxDpr() * view.res;
   renderer.setPixelRatio(view.dpr);
   renderer.setSize(w, h, false);
   const pw = Math.max(1, Math.round(w * view.dpr)), ph = Math.max(1, Math.round(h * view.dpr));

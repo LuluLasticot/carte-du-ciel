@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { NOTE, PENTA, Snd } from '../audio/audio';
-import { CARD_H, CARD_W, Card } from '../cards/card';
+import { CARD_H, CARD_W, Card, texScale } from '../cards/card';
 import { TEAR_V } from '../cards/textures';
 import { $ } from '../core/dom';
 import { pointer } from '../core/input';
@@ -17,6 +17,8 @@ import { store } from '../store/storage';
 import { UI } from '../ui/ui';
 import { type FlowState, canGo, IllegalTransition } from './machine';
 import { rollPack } from '../data/roll';
+import { renderFaces } from '../cards/faces';
+import { addCard, collection, countPack, ownedCount, requestPersistence } from '../store/collection';
 
 export const pack = new Pack();
 mainScene.add(pack.group);
@@ -43,8 +45,6 @@ export let skipping = false;
 export let stackZ = 0; // recul de la pile pendant les révélations
 export let lastInteract = 0;
 export let ghost = { t: 99, run: -1 };
-export const collection = store.get('cdc.col', {});
-export let firstPack = Object.keys(collection).length === 0;
 export const FORCE = (() => { const h = (location.hash || '').toLowerCase(); return h.includes('mythique') ? 4 : h.includes('legendaire') ? 3 : h.includes('epique') ? 2 : -1; })();
 export interface Place { x: number; y: number; z: number; sc: number; rz?: number }
 export interface Layout {
@@ -57,7 +57,7 @@ export interface Layout {
 export const LAY = {} as Layout;
 
 export function haptic(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) { /* refusé */ } }
-export function owned() { return Object.keys(collection).length; }
+export function owned() { return ownedCount(collection); }
 
 // --------------------------- mise en page (unités du monde) ---------------------------
 setPackLayout(function () {
@@ -136,15 +136,17 @@ export function settleLayout() {
 export async function fillPack() {
   cards.forEach((c) => c.dispose());
   cards = [];
-  const data = rollPack(packType, { random: RND, first: firstPack, force: FORCE });
+  const data = rollPack(packType, { random: RND, first: collection.packs === 0, force: FORCE });
+  // faces dessinées dans un Worker quand c'est possible (le fil principal reste libre)
+  const faces = await renderFaces(data, texScale());
   for (let i = 0; i < 5; i++) {
-    const c = new Card(data[i]);
+    const c = new Card(data[i], faces?.[i]);
     c.s = { x: 0, y: -0.16, z: (4 - i) * 0.014 - 0.028, rx: 0, ry: Math.PI, rz: 0, sc: 0.92 };
     pack.stack.add(c.group);
     c.update(0);
     renderer.initTexture(c.texC); renderer.initTexture(c.texM);
     cards.push(c);
-    await yieldToBrowser();
+    if (!faces) await yieldToBrowser();
   }
   try { await renderer.compileAsync(mainScene, cam); } catch (e) { /* compilation au premier rendu */ }
 }
@@ -219,6 +221,8 @@ export function tearFrame(dt) {
 export function completeTear() {
   if (pack.done) return;
   go('opening');
+  countPack();
+  if (collection.packs === 1) requestPersistence();
   pack.target = pack.dir > 0 ? 1 : 0;
   pack.step(0.05);
   Snd.tearStop();
@@ -314,9 +318,7 @@ export function enterReveal() {
 }
 export function markOwned(card) {
   const n = card.data.n;
-  const isNew = !collection[n];
-  collection[n] = (collection[n] || 0) + 1;
-  store.set('cdc.col', collection);
+  const isNew = addCard(n);
   UI.setCount(owned());
   return isNew;
 }
@@ -387,13 +389,16 @@ export async function revealNext() {
 
 // --------------------------- séquence finale (la planche la plus rare) ---------------------------
 export function skipWalkout() { if (state === 'walkout' && !skipping) { skipping = true; Clock.scale = 3.2; UI.show(UI.woSkip, false); for (const el of [UI.woC, UI.woT, UI.woD]) UI.out(el); UI.woRet.classList.remove('on', 'lock'); } }
+let walkoutRun = 0, woLate = false;
 export async function walkout() {
+  woLate = false;
   go('walkout'); busy = true; skipping = false;
   const c = cards[4], d = c.data, t = c.tier, col = TIERS[t].rgb;
   const C = CONS[d.con];
   UI.setTier(t);
   UI.hint(null); UI.show(UI.cinfo, false);
-  setTimeout(() => { if (state === 'walkout' && !skipping) UI.show(UI.woSkip, true); }, 1400);
+  const woToken = ++walkoutRun;
+  setTimeout(() => { if (state === 'walkout' && !skipping && woToken === walkoutRun && !woLate) UI.show(UI.woSkip, true); }, 1400);
   (lastTray || Promise.resolve()).then(() => cards.slice(0, 4).forEach((k, i) => to(k.s, { y: LAY.trayY - 2.2 * LAY.trayS * CARD_H - 0.6 }, { dur: 0.5, delay: i * 0.03, ease: E.p3i })));
   mainScene.attach(c.group); c.syncFromWorld();
   c.idle = 0;
@@ -463,7 +468,7 @@ export async function walkout() {
   // 4 — tension : on plonge vers l'étoile
   UI.out(UI.woD);
   UI.woRet.classList.remove('on', 'lock'); UI.woRet.classList.add('out');
-  UI.show(UI.woSkip, false);
+  UI.show(UI.woSkip, false); woLate = true;
   Snd.riser(1.3 / Clock.scale, 0.3); Snd.droneSwell(3000, 1.2 / Clock.scale);
   const fov0 = sky.fov;
   to(conLineMat.uniforms.uAlpha, { value: 0 }, { dur: 0.6 });
@@ -493,6 +498,7 @@ export async function walkout() {
   if (skipping) { Clock.scale = 1; skipping = false; }
   await wait(0.24);
   // 6 — impact : la planche surgit
+  UI.show(UI.woSkip, false); // le minuteur d'affichage a pu se déclencher pendant l'accélération
   sky.fov = fov0; sky.bright = 1; post.zoomBlur = 0; post.lens.w = 0;
   conLineMat.uniforms.uAlpha.value = 0; conStarMat.uniforms.uAlpha.value = 0;
   flare.int = 0;
@@ -596,7 +602,6 @@ export async function newPack() {
   cards.forEach((c, i) => to(c.s, { y: c.s.y - view.visH * 1.2, rz: (Math.random() - 0.5) * 0.8, rx: 0.4 }, { dur: 0.6, delay: i * 0.04, ease: E.p3i }));
   await wait(0.8);
   heroCard = null;
-  firstPack = false;
   pack.reset(packType);
   pack.inner.add(pack.stack);
   pack.stack.position.set(0, 0, 0); pack.stack.rotation.set(0, 0, 0); pack.stack.scale.setScalar(1);

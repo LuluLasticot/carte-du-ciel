@@ -7,6 +7,30 @@ import { store } from '../store/storage';
 
 export const NOTE = { D3: 146.83, A3: 220, D4: 293.66, E4: 329.63, Fs4: 369.99, A4: 440, B4: 493.88, D5: 587.33, E5: 659.26, Fs5: 739.99, A5: 880, B5: 987.77, D6: 1174.66, E6: 1318.5, Fs6: 1479.98, A6: 1760 };
 export const PENTA = [NOTE.D5, NOTE.E5, NOTE.Fs5, NOTE.A5, NOTE.B5, NOTE.D6, NOTE.E6, NOTE.Fs6, NOTE.A6];
+// Sur iPhone, le bouton « silencieux » coupe WebAudio sauf si la page se déclare lecteur audio.
+// Safari 16.4+ : navigator.audioSession ; plus ancien : une piste silencieuse jouée en boucle.
+function silentWavUrl(): string {
+  const n = 4410, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 44100, true);
+  v.setUint32(28, 88200, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+let unmuted = false;
+export function unmuteIOS() {
+  if (unmuted) return;
+  unmuted = true;
+  const nav = navigator as Navigator & { audioSession?: { type: string } };
+  if (nav.audioSession) { try { nav.audioSession.type = 'playback'; } catch (e) { /* ignoré */ } return; }
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!ios) return;
+  const a = document.createElement('audio');
+  a.setAttribute('x-webkit-airplay', 'deny');
+  a.preload = 'auto'; a.loop = true; a.src = silentWavUrl();
+  a.play().catch(() => { /* refusé : le son restera soumis au bouton silencieux */ });
+}
+
 export const Snd = {
   ctx: null, muted: store.get('cdc.muted', false), tear: null, drone: null,
   ensure() {
@@ -14,6 +38,7 @@ export const Snd = {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
     try { this.ctx = new AC(); } catch (e) { return false; }
+    unmuteIOS();
     const c = this.ctx;
     this.master = c.createGain(); this.master.gain.value = this.muted ? 0 : 0.85;
     const comp = c.createDynamicsCompressor();
