@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Carte du Ciel</title>
+  <meta name="description" content="Ouvrez des pochettes de planches célestes : déchirez l'emballage du doigt et découvrez 32 objets du ciel en 3D, de la Lune à Sagittarius A*.">
+  <meta name="theme-color" content="#05060B">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Carte du Ciel">
+  <meta property="og:description" content="Ouvrez des pochettes de planches célestes en 3D.">
+  <meta property="og:type" content="website">
+</head>
+<body>
+  <div id="app">
+    <canvas id="gl" tabindex="0" aria-label="Pochette de cartes Carte du Ciel. Glissez horizontalement le long du pointillé pour la déchirer, ou appuyez sur Espace."></canvas>
+
+    <header class="ui top" id="top">
+      <div class="brand"><b>Carte du Ciel</b><span>Série I · 32 planches</span></div>
+      <div class="tr">
+        <span class="count" id="count">Collection<br><em>00</em>/32</span>
+        <button class="icon-btn" id="snd" type="button" aria-pressed="false" aria-label="Couper le son">
+          <svg class="on-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18 6.5a7.8 7.8 0 0 1 0 11"/></svg>
+          <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="ui cinfo" id="cinfo" aria-live="polite"></div>
+
+    <div class="ui wo" id="wo" aria-hidden="true">
+      <svg class="reticle" id="woRet" viewBox="-100 -100 200 200" aria-hidden="true"></svg>
+      <div class="clue" id="woC"><div class="lab">Constellation</div><div class="big" id="woCName"></div></div>
+      <div class="clue" id="woT"><div class="lab" id="woCoord"></div><div class="mid" id="woType"></div></div>
+      <div class="clue" id="woD"><div class="digits" id="woDig"></div><div class="lab" id="woUnit" style="margin:14px 0 0"></div></div>
+      <div class="skip" id="woSkip">Touchez pour accélérer</div>
+    </div>
+
+    <div class="ui hero" id="hero"><div class="t" id="heroT"></div><div class="n" id="heroN"></div><div class="s" id="heroS"></div></div>
+
+    <div class="ui packs" id="packs">
+      <div class="seg" role="radiogroup" aria-label="Type de pochette">
+        <button type="button" role="radio" data-pack="0" aria-checked="true"><i></i>Standard</button>
+        <button type="button" role="radio" data-pack="1" aria-checked="false"><i></i>Dorée</button>
+        <button type="button" role="radio" data-pack="2" aria-checked="false"><i></i>Singularité</button>
+      </div>
+      <div class="odds" id="odds"></div>
+    </div>
+
+    <div class="ui sum" id="sum">
+      <button class="btn" id="again" type="button">Nouvelle pochette</button>
+      <p>Touchez une planche pour l'examiner</p>
+    </div>
+
+    <aside class="ui insp" id="insp" aria-live="polite">
+      <button class="icon-btn close" id="inspClose" type="button" aria-label="Fermer la fiche">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="t" id="inspT"></div>
+      <h2 id="inspN"></h2>
+      <div class="ty" id="inspTy"></div>
+      <p class="d" id="inspD"></p>
+      <dl id="inspDl"></dl>
+    </aside>
+
+    <div class="ui hint" id="hint" role="status"></div>
+
+    <div class="loader" id="loader">
+      <svg viewBox="-50 -50 100 100" fill="none" stroke="currentColor" aria-hidden="true">
+        <circle r="44" stroke-width="1"/><circle r="38" stroke-width=".6" stroke-dasharray="1.2 2.78"/>
+        <path d="M0-30V-10M0 10V30M-30 0H-10M10 0H30" stroke-width="1"/><circle r="2" fill="currentColor" stroke="none"/>
+      </svg>
+      <p id="loadMsg">Réglage de l'oculaire…</p>
+    </div>
+  </div>
+  <noscript><p class="noscript">Carte du Ciel a besoin de JavaScript et de WebGL pour afficher le ciel en 3D.</p></noscript>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
